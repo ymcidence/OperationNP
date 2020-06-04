@@ -4,7 +4,7 @@ import tensorflow as tf
 
 from meta import ROOT_PATH
 from time import gmtime, strftime
-from model.cnp import BasicCNP as Model
+from model.cnp import MNISTCNP as Model
 from util.data.mnist import MNISTData as Data
 from util.plot import plot_mnist
 

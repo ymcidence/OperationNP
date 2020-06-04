@@ -25,3 +25,27 @@ class BasicCNP(tf.keras.Model):
     @staticmethod
     def obj(gt, pred: tfp.distributions.MultivariateNormalDiag):
         return -tf.reduce_mean(pred.log_prob(gt))
+
+
+class MNISTCNP(BasicCNP):
+    def __init__(self, sigmoid=False, img_size=28, emb_size=64, *args, **kwargs):
+        super().__init__(sigmoid, *args, **kwargs)
+        self.emb = tf.keras.layers.Embedding(img_size * img_size, emb_size)
+
+    def call(self, observations, targets):
+        o_emb = self.emb(tf.squeeze(observations[0]))
+
+        context = self.encoder([o_emb, observations[1]])  # [N T D]
+        context = tf.reduce_mean(context, axis=1)  # [N D]
+
+        t_emb = self.emb(tf.squeeze(targets))
+        mean, var = self.decoder([context, t_emb])
+        if self.sigmoid:
+            mean = tf.nn.sigmoid(mean)
+
+        mvn = tfp.distributions.MultivariateNormalDiag(mean, var)
+        return mean, var, mvn
+
+    # @staticmethod
+    # def obj(gt, pred):
+    #     return tf.reduce_mean(tf.nn.l2_loss(gt - pred))

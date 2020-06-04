@@ -30,9 +30,9 @@ class MNISTData(object):
 
             indices = gen_indices(ob_pos)
             ob_value = tf.gather_nd(_x, indices)
-            ob_pos = (tf.cast(ob_pos, tf.float32) * 2. / self.dim) - 1
+            # ob_pos = (tf.cast(ob_pos, tf.float32) * 2. / self.dim) - 1
 
-            tar_pos = tf.range(-1, 1, 2 / self.dim, dtype=tf.float32)
+            tar_pos = tf.range(0, self.dim, dtype=tf.int32)
             tar_pos = tf.tile(tf.expand_dims(tar_pos, axis=0), [self.batch_size, 1])
             tar_value = _x
             rslt = [ob_value, tar_pos, tar_value]
