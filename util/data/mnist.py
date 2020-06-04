@@ -1,6 +1,7 @@
 from __future__ import absolute_import, division, print_function, unicode_literals
 import tensorflow as tf
 import numpy as np
+from util.plot import gen_indices
 
 
 class MNISTData(object):
@@ -20,19 +21,22 @@ class MNISTData(object):
 
     def _build(self):
         def parser(d):
-            _x = d['x']
+            _x = tf.cast(d['x'], tf.float32)
 
             num_ob = tf.random.uniform(shape=(), minval=64, maxval=self.max_ob, dtype=tf.int32)
 
-            ob_pos = tf.random.uniform([num_ob], 0, self.dim - 1, dtype=tf.int32)
+            ob_pos = tf.random.uniform([self.batch_size, num_ob], 0, self.dim - 1, dtype=tf.int32)
             ob_pos = tf.expand_dims(ob_pos, -1)
-            ob_value = tf.gather(_x, ob_pos, axis=-1)
+
+            indices = gen_indices(ob_pos)
+            ob_value = tf.gather_nd(_x, indices)
             ob_pos = (tf.cast(ob_pos, tf.float32) * 2. / self.dim) - 1
 
             tar_pos = tf.range(-1, 1, 2 / self.dim, dtype=tf.float32)
+            tar_pos = tf.tile(tf.expand_dims(tar_pos, axis=0), [self.batch_size, 1])
             tar_value = _x
-            rslt = [ob_pos, ob_value, tar_pos, tar_value]
-            return [tf.expand_dims(i, -1) for i in rslt]
+            rslt = [ob_value, tar_pos, tar_value]
+            return [ob_pos] + [tf.expand_dims(i, -1) for i in rslt]
 
         data_train = tf.data.Dataset.from_tensor_slices({'x': self.x_train, 'l': self.y_train})
         data_test = tf.data.Dataset.from_tensor_slices({'x': self.x_test, 'l': self.y_test})

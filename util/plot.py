@@ -34,3 +34,33 @@ def plot_toy(target_x, target_y, context_x, context_y, pred_y, var, tb=False):
         return image
     else:
         plt.show()
+
+
+def gen_indices(col_ind):
+    """
+
+    :param col_ind: [N D 1]
+    :return:
+    """
+    shape = tf.shape(col_ind)
+    row_ind = tf.range(0, shape[0])
+    row_ind = tf.expand_dims(tf.tile(tf.expand_dims(row_ind, -1), [1, shape[1]]), -1)
+    ind = tf.concat([row_ind, col_ind], axis=-1)
+    return ind
+
+
+def plot_mnist(o_x, o_y, t_y, gt_y, size=28):
+    batch_size = tf.shape(o_x)[0]
+    target_shape = [batch_size, size, size, 1]
+    original_shape = [batch_size, size * size]
+
+    # _o_x = tf.cast((o_x + 1) / 2 * (size * size), tf.int32)
+    _o_x = tf.cast(o_x, tf.int32)
+    indices = gen_indices(_o_x)
+    _o_y = tf.scatter_nd(indices, tf.squeeze(o_y), original_shape)
+
+    p_1 = tf.reshape(_o_y, target_shape)
+    p_2 = tf.reshape(gt_y, target_shape)
+    p_3 = tf.reshape(t_y, target_shape)
+
+    return tf.concat([p_1, p_2, p_3], axis=2)
