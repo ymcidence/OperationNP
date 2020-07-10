@@ -1,6 +1,7 @@
 from __future__ import absolute_import, division, print_function, unicode_literals
 import tensorflow as tf
 from util.tf_helper import row_distance, row_distance_hamming
+import numpy as np
 
 
 class BasicEncoder(tf.keras.layers.Layer):
@@ -74,16 +75,21 @@ class MultiContextDecoder(tf.keras.layers.Layer):
         fc_hash = self.fc_hash(fc_base)
         return fc_hash, fc_k, fc_q
 
-    def loss(self, fc_hash, fc_k, fc_q):
-        prod = tf.matmul(fc_q, fc_k, transpose_b=True) / tf.sqrt(self.middle_size)
+    def loss(self, fc_hash, fc_k, fc_q, step=-1):
+        prod = tf.matmul(fc_q, fc_k, transpose_b=True) / np.sqrt(self.middle_dim)
         prod = tf.nn.softmax(prod, axis=1)  # [B k]
         sim = tf.exp(row_distance(prod, prod) / -0.01) * -1 + 1
         sim_hamming = row_distance_hamming(fc_hash)
-        batch_size = tf.shape(fc_hash)[0]
+        batch_size = tf.cast(tf.shape(fc_hash)[0], tf.float32)
 
         sim_loss = tf.reduce_mean(tf.nn.l2_loss(sim_hamming - sim)) / batch_size / batch_size
 
         quantized = tf.cast(tf.greater(fc_hash, .5), dtype=tf.float32)
         quantization_loss = tf.reduce_mean(tf.nn.l2_loss(quantized - fc_hash)) / batch_size / self.code_length
 
+        if step >= 0:
+            tf.summary.image('prod', tf.expand_dims(tf.expand_dims(prod, -1), 0), step=step, max_outputs=1)
+            tf.summary.image('sim/code', tf.expand_dims(tf.expand_dims(sim_hamming, -1), 0), step=step, max_outputs=1)
+            tf.summary.scalar('loss/sim_loss', sim_loss, step=step)
+            tf.summary.scalar('loss/q_loss', quantization_loss, step=step)
         return sim_loss, quantization_loss

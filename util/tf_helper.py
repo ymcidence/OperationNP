@@ -35,3 +35,10 @@ def row_distance_hamming(tensor_in):
     c2 = tf.matmul(m1, tensor_in, transpose_b=True)
     normalized_dist = tf.math.abs(c1 + c2) / code_length
     return tf.pow(1 - normalized_dist, 1.4)
+
+
+@tf.function
+def label_relevance(label):
+    rel = tf.matmul(label, label, transpose_b=True)
+    rel = tf.cast(tf.greater(rel, 0), tf.float32)
+    return rel
