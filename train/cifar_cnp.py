@@ -20,7 +20,7 @@ def train_step(model: Model, batch_data, opt: tf.optimizers.Optimizer, step):
         opt.apply_gradients(zip(gradient, model.trainable_variables))
 
     fc_hash = net_out['decoder']
-    code = (tf.cast(tf.greater(fc_hash, .5), tf.float32) + 1) / 2
+    code = (tf.cast(tf.greater(fc_hash, .0), tf.float32) + 1) / 2
     if summary_step >= 0:
         sim_gt = tf.expand_dims(tf.expand_dims(label_relevance(label), 0), -1)
         batch_map = eval_cls_map(code.numpy(), code.numpy(), label.numpy(), label.numpy())

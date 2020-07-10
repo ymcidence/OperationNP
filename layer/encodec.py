@@ -1,6 +1,6 @@
 from __future__ import absolute_import, division, print_function, unicode_literals
 import tensorflow as tf
-from util.tf_helper import row_distance_cosine, row_distance_hamming, ste
+from util.tf_helper import row_distance_cosine, row_distance_hamming, ste, binary_activation
 import numpy as np
 
 
@@ -65,7 +65,8 @@ class MultiContextDecoder(tf.keras.layers.Layer):
         self.fc_k = tf.keras.layers.Dense(middle_dim, use_bias=False)
         self.fc_v = tf.keras.layers.Dense(middle_dim, use_bias=False)
         self.fc_q = tf.keras.layers.Dense(middle_dim, use_bias=False)
-        self.fc_hash = tf.keras.layers.Dense(code_length, activation=tf.nn.sigmoid)
+        self.fc_hash = tf.keras.layers.Dense(code_length)
+        self.layernorm = tf.keras.layers.LayerNormalization(epsilon=1e-6)
 
     # noinspection PyMethodOverriding
     def call(self, feat, emb):
@@ -74,6 +75,7 @@ class MultiContextDecoder(tf.keras.layers.Layer):
         fc_q = self.fc_q(feat)  # [N d]
 
         attended = self.dot_attention(fc_q, fc_k, fc_v) + fc_q
+        attended = self.layernorm(attended)
 
         fc_hash = self.fc_hash(attended)
         return fc_hash
@@ -83,18 +85,20 @@ class MultiContextDecoder(tf.keras.layers.Layer):
         return a @ v
 
     def loss(self, fc_hash, vq_feat, step=-1):
-        sim = (row_distance_cosine(vq_feat, vq_feat) + 1) / 2
-        code = ste(fc_hash)
+        sim = tf.pow((row_distance_cosine(vq_feat, vq_feat) + 1) / 2, 2.5)
+        eps = tf.ones_like(fc_hash,dtype=tf.float32) / 2.
+        code, _ = binary_activation(fc_hash, eps)
         sim_hamming = row_distance_hamming(code)
         batch_size = tf.cast(tf.shape(fc_hash)[0], tf.float32)
 
         sim_loss = tf.reduce_mean(tf.nn.l2_loss(sim_hamming - sim)) / batch_size / batch_size
 
-        quantized = (tf.cast(tf.greater(fc_hash, .5), dtype=tf.float32) + 1.) / 2.
-        quantization_loss = tf.reduce_mean(tf.nn.l2_loss(quantized - fc_hash)) / batch_size / self.code_length
+        quantized = (tf.cast(tf.greater(fc_hash, .0), dtype=tf.float32) + 1.) / 2.
+        quantization_loss = 0 * tf.reduce_mean(tf.nn.l2_loss(quantized - fc_hash)) / batch_size / self.code_length
 
         if step >= 0:
             tf.summary.image('sim/code', tf.expand_dims(tf.expand_dims(sim_hamming, -1), 0), step=step, max_outputs=1)
+            tf.summary.image('sim/sim', tf.expand_dims(tf.expand_dims(sim, -1), 0), step=step, max_outputs=1)
             tf.summary.scalar('loss_dec/sim_loss', sim_loss, step=step)
             tf.summary.scalar('loss_dec/q_loss', quantization_loss, step=step)
             tf.summary.scalar('code/ones', tf.reduce_mean(code), step=step)
