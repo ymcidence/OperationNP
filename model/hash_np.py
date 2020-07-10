@@ -24,7 +24,7 @@ class HashNP(tf.keras.Model):
 
             return rslt
         else:
-            return (tf.cast(tf.greater(self.decoder(inputs, self.encoder.emb), .5), tf.float32) + 1)/2
+            return (tf.cast(tf.greater(self.decoder(inputs, self.encoder.emb), .0), tf.float32) + 1)/2
 
     def loss(self, inputs, net_out, lamb=(1, 1, 1), step=-1):
         encoded, vq_feat, context_ind, decoded, _ = net_out['encoder']
