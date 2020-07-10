@@ -44,8 +44,12 @@ class MNISTData(object):
         data_train = data_train.cache().repeat().shuffle(1000).batch(self.batch_size)
         data_test = data_test.cache().repeat().shuffle(1000).batch(self.batch_size)
 
-        self.data_train = data_train.map(parser)
-        self.data_test = data_test.map(parser)
+        if self.max_ob >= 0:
+            self.data_train = data_train.map(parser)
+            self.data_test = data_test.map(parser)
+        else:
+            self.data_train = data_train
+            self.data_test = data_test
 
 
 if __name__ == '__main__':

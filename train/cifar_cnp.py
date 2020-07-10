@@ -14,19 +14,20 @@ def train_step(model: Model, batch_data, opt: tf.optimizers.Optimizer, step):
     label = batch_data[2]
     summary_step = -1 if step % 50 > 0 else step
     with tf.GradientTape() as tape:
-        source_feat, _, fc_hash, fc_k, fc_q = model(feat, training=True)
-        loss = model.loss(source_feat, fc_hash, fc_k, fc_q, step=summary_step)
+        net_out = model(feat, training=True)
+        loss = model.loss(feat, net_out, step=summary_step)
         gradient = tape.gradient(loss, sources=model.trainable_variables)
         opt.apply_gradients(zip(gradient, model.trainable_variables))
 
-    code = tf.cast(tf.greater(fc_hash, .5), tf.float32)
+    fc_hash = net_out['decoder']
+    code = (tf.cast(tf.greater(fc_hash, .0), tf.float32) + 1) / 2
     if summary_step >= 0:
         sim_gt = tf.expand_dims(tf.expand_dims(label_relevance(label), 0), -1)
         batch_map = eval_cls_map(code.numpy(), code.numpy(), label.numpy(), label.numpy())
         tf.summary.image('sim/gt', sim_gt, step=summary_step, max_outputs=1)
         tf.summary.scalar('map/train', batch_map, step=summary_step)
 
-    return code
+    return code, loss
 
 
 def train(max_iter=10000):
@@ -51,11 +52,11 @@ def train(max_iter=10000):
         with writer.as_default():
             train_batch = next(train_iter)
 
-            train_code = train_step(model, train_batch, opt, i)
+            train_code, train_loss = train_step(model, train_batch, opt, i)
             train_entry = train_batch[0]
             train_label = train_batch[2]
             data.update(train_entry.numpy(), train_code.numpy(), train_label.numpy(), 'train')
-            print('Step {}'.format(i))
+            print('Step {}: loss: {}'.format(i, train_loss.numpy()))
 
             if i % 500 == 0 and i > 0:
                 print('Testing!!!!!!!!')
@@ -67,6 +68,7 @@ def train(max_iter=10000):
                                         at=1000)
 
                 tf.summary.scalar('map/test', test_map, step=i)
+
 
 if __name__ == '__main__':
     train()

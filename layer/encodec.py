@@ -1,6 +1,6 @@
 from __future__ import absolute_import, division, print_function, unicode_literals
 import tensorflow as tf
-from util.tf_helper import row_distance, row_distance_hamming
+from util.tf_helper import row_distance_cosine, row_distance_hamming, ste, binary_activation
 import numpy as np
 
 
@@ -62,34 +62,44 @@ class MultiContextDecoder(tf.keras.layers.Layer):
         super().__init__(**kwargs)
         self.middle_dim = middle_dim
         self.code_length = code_length
-        self.fc_k = tf.keras.layers.Dense(middle_dim / 2)
-        self.fc_base = tf.keras.layers.Dense(middle_dim, activation=tf.nn.relu)
-        self.fc_q = tf.keras.layers.Dense(middle_dim / 2)
-        self.fc_hash = tf.keras.layers.Dense(code_length, activation=tf.nn.sigmoid)
+        self.fc_k = tf.keras.layers.Dense(middle_dim, use_bias=False)
+        self.fc_v = tf.keras.layers.Dense(middle_dim, use_bias=False)
+        self.fc_q = tf.keras.layers.Dense(middle_dim, use_bias=False)
+        self.fc_hash = tf.keras.layers.Dense(code_length)
+        self.layernorm = tf.keras.layers.LayerNormalization(epsilon=1e-6)
 
     # noinspection PyMethodOverriding
-    def call(self, query, emb):
-        fc_k = self.fc_k(emb)
-        fc_base = self.fc_base(query)
-        fc_q = self.fc_q(fc_base)
-        fc_hash = self.fc_hash(fc_base)
-        return fc_hash, fc_k, fc_q
+    def call(self, feat, emb):
+        fc_k = self.fc_k(emb)  # [k d]
+        fc_v = self.fc_v(emb)  # [k d]
+        fc_q = self.fc_q(feat)  # [N d]
 
-    def loss(self, fc_hash, fc_k, fc_q, step=-1):
-        prod = tf.matmul(fc_q, fc_k, transpose_b=True) / np.sqrt(self.middle_dim)
-        prod = tf.nn.softmax(prod, axis=1)  # [B k]
-        sim = tf.exp(row_distance(prod, prod) / -0.01) * -1 + 1
-        sim_hamming = row_distance_hamming(fc_hash)
+        attended = self.dot_attention(fc_q, fc_k, fc_v) + fc_q
+        attended = self.layernorm(attended)
+
+        fc_hash = self.fc_hash(attended)
+        return fc_hash
+
+    def dot_attention(self, q, k, v):
+        a = tf.nn.softmax(tf.matmul(q, k, transpose_b=True) / np.sqrt(self.middle_dim), axis=1)  # [N k]
+        return a @ v
+
+    def loss(self, fc_hash, vq_feat, step=-1):
+        sim = tf.pow((row_distance_cosine(vq_feat, vq_feat) + 1) / 2, 2.5)
+        eps = tf.ones_like(fc_hash,dtype=tf.float32) / 2.
+        code, _ = binary_activation(fc_hash, eps)
+        sim_hamming = row_distance_hamming(code)
         batch_size = tf.cast(tf.shape(fc_hash)[0], tf.float32)
 
         sim_loss = tf.reduce_mean(tf.nn.l2_loss(sim_hamming - sim)) / batch_size / batch_size
 
-        quantized = tf.cast(tf.greater(fc_hash, .5), dtype=tf.float32)
-        quantization_loss = tf.reduce_mean(tf.nn.l2_loss(quantized - fc_hash)) / batch_size / self.code_length
+        quantized = (tf.cast(tf.greater(fc_hash, .0), dtype=tf.float32) + 1.) / 2.
+        quantization_loss = 0 * tf.reduce_mean(tf.nn.l2_loss(quantized - fc_hash)) / batch_size / self.code_length
 
         if step >= 0:
-            tf.summary.image('prod', tf.expand_dims(tf.expand_dims(prod, -1), 0), step=step, max_outputs=1)
             tf.summary.image('sim/code', tf.expand_dims(tf.expand_dims(sim_hamming, -1), 0), step=step, max_outputs=1)
-            tf.summary.scalar('loss/sim_loss', sim_loss, step=step)
-            tf.summary.scalar('loss/q_loss', quantization_loss, step=step)
+            tf.summary.image('sim/sim', tf.expand_dims(tf.expand_dims(sim, -1), 0), step=step, max_outputs=1)
+            tf.summary.scalar('loss_dec/sim_loss', sim_loss, step=step)
+            tf.summary.scalar('loss_dec/q_loss', quantization_loss, step=step)
+            tf.summary.scalar('code/ones', tf.reduce_mean(code), step=step)
         return sim_loss, quantization_loss
