@@ -23,6 +23,16 @@ def row_distance(tensor_a, tensor_b):
 
 
 @tf.function
+def row_distance_cosine(tensor_a, tensor_b):
+    norm_a = tf.sqrt(tf.reduce_sum(tf.pow(tensor_a, 2), 1, keepdims=True))  # [N, 1]
+    norm_b = tf.sqrt(tf.reduce_sum(tf.pow(tensor_b, 2), 1, keepdims=True))
+    denominator = tf.matmul(norm_a, norm_b, transpose_b=True)
+    numerator = tf.matmul(tensor_a, tensor_b, transpose_b=True)
+
+    return numerator / denominator
+
+
+@tf.function
 def row_distance_hamming(tensor_in):
     """
     Hamming-distance-based graph. It is self-connected.
@@ -42,3 +52,13 @@ def label_relevance(label):
     rel = tf.matmul(label, label, transpose_b=True)
     rel = tf.cast(tf.greater(rel, 0), tf.float32)
     return rel
+
+
+@tf.custom_gradient
+def ste(x):
+    rslt = (tf.cast(tf.greater(x, .5), tf.float32) + 1.) / 2.
+
+    def grad(d_x):
+        return d_x
+
+    return rslt, grad
