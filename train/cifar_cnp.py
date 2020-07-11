@@ -5,11 +5,31 @@ from time import gmtime, strftime
 from util.data.cifar import Dataset
 from util.tf_helper import label_relevance
 from util.eval_tools import eval_cls_map
-from model.hash_np import HashNP as Model
+from model.hash_np import DetHashNP as Model
 from meta import ROOT_PATH
 
 
 def train_step(model: Model, batch_data, opt: tf.optimizers.Optimizer, step):
+    feat = batch_data[1]
+    label = batch_data[2]
+    summary_step = -1 if step % 50 > 0 else step
+    with tf.GradientTape() as tape:
+        net_out = model(feat, training=True)
+        loss = model.loss(feat, net_out, step=summary_step)
+        gradient = tape.gradient(loss, sources=model.trainable_variables)
+        opt.apply_gradients(zip(gradient, model.trainable_variables))
+
+    code, prob, fc_cls = net_out['decoder']
+    if summary_step >= 0:
+        sim_gt = tf.expand_dims(tf.expand_dims(label_relevance(label), 0), -1)
+        batch_map = eval_cls_map(code.numpy(), code.numpy(), label.numpy(), label.numpy())
+        tf.summary.image('sim/gt', sim_gt, step=summary_step, max_outputs=1)
+        tf.summary.scalar('map/train', batch_map, step=summary_step)
+
+    return code, loss
+
+
+def train_step_det(model: Model, batch_data, opt: tf.optimizers.Optimizer, step):
     feat = batch_data[1]
     label = batch_data[2]
     summary_step = -1 if step % 50 > 0 else step
