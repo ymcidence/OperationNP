@@ -74,7 +74,7 @@ class MultiContextDecoder(tf.keras.layers.Layer):
         fc_v = self.fc_v(emb)  # [k d]
         fc_q = self.fc_q(feat)  # [N d]
 
-        attended = self.dot_attention(fc_q, fc_k, fc_v) + fc_q
+        attended = self.dot_attention(fc_q, fc_k, fc_v) * .1 + fc_q
         attended = self.layernorm(attended)
 
         fc_hash = self.fc_hash(attended)
@@ -86,7 +86,7 @@ class MultiContextDecoder(tf.keras.layers.Layer):
 
     def loss(self, fc_hash, vq_feat, step=-1):
         sim = tf.pow((row_distance_cosine(vq_feat, vq_feat) + 1) / 2, 2.5)
-        eps = tf.ones_like(fc_hash,dtype=tf.float32) / 2.
+        eps = tf.ones_like(fc_hash, dtype=tf.float32) / 2.
         code, _ = binary_activation(fc_hash, eps)
         sim_hamming = row_distance_hamming(code)
         batch_size = tf.cast(tf.shape(fc_hash)[0], tf.float32)
@@ -103,3 +103,39 @@ class MultiContextDecoder(tf.keras.layers.Layer):
             tf.summary.scalar('loss_dec/q_loss', quantization_loss, step=step)
             tf.summary.scalar('code/ones', tf.reduce_mean(code), step=step)
         return sim_loss, quantization_loss
+
+
+class DeterministicDecoder(MultiContextDecoder):
+    def __init__(self, middle_dim=512, code_length=32, k=10, **kwargs):
+        super().__init__(middle_dim=middle_dim, code_length=code_length, **kwargs)
+        self.cls = tf.keras.layers.Dense(k)
+
+    def call(self, feat, emb):
+        fc_hash = super().call(feat, emb)
+
+        eps = tf.ones_like(fc_hash, dtype=tf.float32) / 2.
+        code, prob = binary_activation(fc_hash, eps)
+
+        fc_cls = self.cls(code)
+
+        return code, prob, fc_cls
+
+    @staticmethod
+    @tf.function
+    def kld_loss(q: tf.Tensor, p=0.5):
+        loss = q * tf.math.log(q) - q * tf.math.log(p) + (-q + 1) * tf.math.log(-q + 1) - (-q + 1) * tf.math.log(1 - p)
+        return tf.reduce_mean(tf.reduce_sum(loss, axis=1))
+
+    # noinspection PyMethodOverriding
+    def loss(self, code, prob, fc_cls, label, step=-1):
+        sim_hamming = row_distance_hamming(code)
+        cls_loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(label, fc_cls))
+        kld_loss = .1 * self.kld_loss(prob)
+
+        if step >= 0:
+            tf.summary.image('sim/code', tf.expand_dims(tf.expand_dims(sim_hamming, -1), 0), step=step, max_outputs=1)
+            tf.summary.scalar('loss_dec/cls_loss', cls_loss, step=step)
+            tf.summary.scalar('loss_dec/kld_loss', kld_loss, step=step)
+            tf.summary.scalar('code/ones', tf.reduce_mean(code), step=step)
+
+        return cls_loss, kld_loss
