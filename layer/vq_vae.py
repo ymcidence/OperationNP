@@ -1,14 +1,14 @@
 from __future__ import absolute_import, division, print_function, unicode_literals
 import tensorflow as tf
 from layer import encodec
-from util.tf_helper import row_distance_cosine
+from util.tf_helper import row_distance as row_distance
 
 
 def nearest_context(feature, context):
-    distances = row_distance_cosine(feature, context) * -1
+    distances = row_distance(feature, context) * -1
     min_ind = tf.cast(tf.argmin(distances, axis=1), dtype=tf.int32)
     k = tf.shape(context)[0]
-    min_ind = tf.one_hot(min_ind, k, dtype=tf.float32)  # [N k]
+    min_ind = tf.one_hot(min_ind, k, dtype=tf.float32)  # [N k]x`
     rslt = min_ind @ tf.stop_gradient(context)
     return rslt, min_ind
 
@@ -79,7 +79,7 @@ class VQVAE(tf.keras.layers.Layer):
         loss = likelihood + kl_1 + kl_2
 
         if step >= 0:
-            sim = (row_distance_cosine(self.emb, self.emb) + 1) / 2
+            sim = (row_distance(self.emb, self.emb) + 1) / 2
             sim = tf.expand_dims(tf.expand_dims(sim, 0), -1)
 
             tf.summary.image('vq/emb', sim, step=step, max_outputs=1)

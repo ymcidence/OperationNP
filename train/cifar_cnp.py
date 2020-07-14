@@ -50,8 +50,8 @@ def train_step_det(model: Model, batch_data, opt: tf.optimizers.Optimizer, step)
     return code, loss
 
 
-def train(max_iter=10000):
-    model = Model()
+def train(max_iter=50000):
+    model = Model(k=10)
     data = Dataset()
     opt = tf.keras.optimizers.Adam(1e-4)
     train_iter = iter(data.train_data)
@@ -85,7 +85,7 @@ def train(max_iter=10000):
                 test_code = model(test_feat, training=False)
                 data.update(test_entry.numpy(), test_code.numpy(), test_label.numpy(), 'test')
                 test_map = eval_cls_map(test_code.numpy(), data.train_code, test_label.numpy(), data.train_label,
-                                        at=1000)
+                                        at=None)
 
                 tf.summary.scalar('map/test', test_map, step=i)
 

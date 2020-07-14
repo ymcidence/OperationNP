@@ -19,7 +19,7 @@ def row_distance(tensor_a, tensor_b):
 
     rslt = tf.sqrt(tf.maximum(na - 2 * tf.matmul(tensor_a, tensor_b, False, True) + nb, 0.0))
 
-    return rslt
+    return rslt * -1.
 
 
 @tf.function

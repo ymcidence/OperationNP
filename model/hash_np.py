@@ -53,7 +53,7 @@ class DetHashNP(tf.keras.Model):
         if training:
             encoded, vq_feat, context_ind, decoded, context = self.encoder(inputs)
 
-            code, prob, fc_cls = self.decoder(inputs, tf.stop_gradient(context))
+            code, prob, fc_cls = self.decoder(inputs, context)
 
             rslt = dict()
             rslt['encoder'] = [encoded, vq_feat, context_ind, decoded, context]
