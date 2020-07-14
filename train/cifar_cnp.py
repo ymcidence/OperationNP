@@ -29,7 +29,7 @@ def train_step(model: Model, batch_data, opt: tf.optimizers.Optimizer, step):
     return code, loss
 
 
-def train_step_det(model: Model, batch_data, opt: tf.optimizers.Optimizer, step):
+def train_step_2(model: Model, batch_data, opt: tf.optimizers.Optimizer, step):
     feat = batch_data[1]
     label = batch_data[2]
     summary_step = -1 if step % 50 > 0 else step

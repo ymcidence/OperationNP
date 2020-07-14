@@ -139,3 +139,43 @@ class DeterministicDecoder(MultiContextDecoder):
             tf.summary.scalar('code/ones', tf.reduce_mean(code), step=step)
 
         return cls_loss, kld_loss
+
+
+class MultiDetDecoder(MultiContextDecoder):
+    def __init__(self, group=4, middle_dim=512, code_length=32, k=10, **kwargs):
+        super().__init__(middle_dim=middle_dim, code_length=code_length, **kwargs)
+        self.group = group
+        self.cls = []
+        for i in range(group):
+            self.cls.append(tf.keras.layers.Dense(k))
+
+    def call(self, feat, emb):
+        _emb = tf.split(emb, self.group, axis=1)
+        _emb = tf.concat(_emb, axis=0)
+        fc_hash = super().call(feat, _emb)
+
+        eps = tf.ones_like(fc_hash, dtype=tf.float32) / 2.
+        code, prob = binary_activation(fc_hash, eps)
+
+        fc_cls = []
+        for i in range(self.group):
+            fc_cls.append(self.cls[i](code))
+
+        return code, prob, fc_cls
+
+    # noinspection PyMethodOverriding
+    def loss(self, code, prob, fc_cls, label, step=-1):
+        sim_hamming = row_distance_hamming(code)
+        cls_loss = 0
+        kld_loss = .1 * self.kld_loss(prob)
+
+        for i in range(self.group):
+            cls_loss += tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(label[i], fc_cls[i]))
+
+        if step >= 0:
+            tf.summary.image('sim/code', tf.expand_dims(tf.expand_dims(sim_hamming, -1), 0), step=step, max_outputs=1)
+            tf.summary.scalar('loss_dec/cls_loss', cls_loss, step=step)
+            tf.summary.scalar('loss_dec/kld_loss', kld_loss, step=step)
+            tf.summary.scalar('code/ones', tf.reduce_mean(code), step=step)
+
+        return cls_loss, kld_loss
