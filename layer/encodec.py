@@ -163,6 +163,12 @@ class MultiDetDecoder(MultiContextDecoder):
 
         return code, prob, fc_cls
 
+    @staticmethod
+    @tf.function
+    def kld_loss(q: tf.Tensor, p=0.5):
+        loss = q * tf.math.log(q) - q * tf.math.log(p) + (-q + 1) * tf.math.log(-q + 1) - (-q + 1) * tf.math.log(1 - p)
+        return tf.reduce_mean(tf.reduce_sum(loss, axis=1))
+
     # noinspection PyMethodOverriding
     def loss(self, code, prob, fc_cls, label, step=-1):
         sim_hamming = row_distance_hamming(code)
@@ -171,6 +177,8 @@ class MultiDetDecoder(MultiContextDecoder):
 
         for i in range(self.group):
             cls_loss += tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(label[i], fc_cls[i]))
+
+        cls_loss = cls_loss / self.group
 
         if step >= 0:
             tf.summary.image('sim/code', tf.expand_dims(tf.expand_dims(sim_hamming, -1), 0), step=step, max_outputs=1)

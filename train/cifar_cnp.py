@@ -5,7 +5,7 @@ from time import gmtime, strftime
 from util.data.cifar import Dataset
 from util.tf_helper import label_relevance
 from util.eval_tools import eval_cls_map
-from model.hash_np import DetHashNP as Model
+from model.hash_np import MultiHeadHashNP as Model
 from meta import ROOT_PATH
 
 

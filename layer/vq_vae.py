@@ -132,8 +132,9 @@ class MultiHeadVQVAE(VQVAE):
 
         indexed_emb = tf.concat(indexed_emb, axis=1)
 
-        kl_1 = tf.nn.l2_loss(tf.stop_gradient(encoded) - indexed_emb) / self.emb_dim / batch_size
-        kl_2 = beta * tf.nn.l2_loss(tf.stop_gradient(indexed_emb) - encoded) / self.emb_dim / batch_size
+        _encoded = tf.concat(encoded, axis=1)
+        kl_1 = tf.nn.l2_loss(tf.stop_gradient(_encoded) - indexed_emb) / self.emb_dim / batch_size
+        kl_2 = beta * tf.nn.l2_loss(tf.stop_gradient(indexed_emb) - _encoded) / self.emb_dim / batch_size
 
         sim = (row_distance(self.emb, self.emb) + 1) / 2
         sim = tf.expand_dims(tf.expand_dims(sim, 0), -1)
